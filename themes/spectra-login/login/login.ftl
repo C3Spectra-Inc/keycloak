@@ -21,7 +21,7 @@
       <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form">
         <div class="field">
           <label for="username">Email or Username</label>
-          <input id="username" name="username" type="text" value="${login.username!}" placeholder="Enter your email or username" autocomplete="username" autofocus />
+          <input id="username" name="username" type="text" value="${login.username!?html}" placeholder="Enter your email or username" autocomplete="username" autofocus />
         </div>
         <div class="field pw">
           <label for="password">Password</label>
