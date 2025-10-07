@@ -46,7 +46,7 @@
         <button class="btn" type="submit" id="kc-login" aria-label="Sign in">Sign in</button>
         <#if social.providers?has_content>
           <div class="spacer"></div>
-          <div class="sso">Sign in with SSO</div>
+      
           <#list social.providers as p>
             <button class="btn secondary" type="button" onclick="window.location='${p.loginUrl}'" aria-label="Sign in with ${p.displayName}">${p.displayName}</button>
           </#list>
