@@ -2,8 +2,7 @@
 <@layout.registrationLayout>
   <div class="wrap" role="main">
     
-    <div class="logo" aria-hidden="true"
-         >
+    <div class="logo" aria-hidden="true">
          <svg width="105" height="32" viewBox="0 0 105 32" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M27.651 7.90894L22.5789 10.8116L22.5789 26.9216L27.651 23.9374L27.651 7.90894Z" fill="#334DEF"/>
 <path d="M22.4562 21.1409L27.5283 24.0501L13.7845 31.9994L8.75331 29.0492L22.4562 21.1409Z" fill="#263CC7"/>
