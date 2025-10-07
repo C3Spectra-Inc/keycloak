@@ -48,7 +48,7 @@
           <div class="spacer"></div>
       
           <#list social.providers as p>
-            <button class="btn secondary" type="button" onclick="window.location='${p.loginUrl}'" aria-label="Sign in with ${p.displayName}">${p.displayName}</button>
+            <button class="btn secondary" type="button" onclick="window.location='${p.loginUrl}'" aria-label="Sign in with ${p.displayName}">Sign in with ${p.displayName}</button>
           </#list>
         </#if>
       </form>
