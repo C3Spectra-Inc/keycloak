@@ -28,7 +28,7 @@ jobs:
           docker push 606191926999.dkr.ecr.us-east-1.amazonaws.com/c3-keycloak:${tag}
   deploy:
     runs-on:
-      labels: ubuntu-latest
+      labels: toolsEnv
     needs: build_push
     steps:
       - name: Deploy image to development
