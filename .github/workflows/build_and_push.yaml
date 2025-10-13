@@ -25,6 +25,7 @@ jobs:
         run: |
           tag="keycloak-26.3.2-debian-12-r2-${GITHUB_SHA:0:7}"
           docker build . -t 606191926999.dkr.ecr.us-east-1.amazonaws.com/c3-keycloak:${tag}
+          docker push 606191926999.dkr.ecr.us-east-1.amazonaws.com/c3-keycloak:${tag}
   deploy:
     runs-on:
       labels: toolsEnv
@@ -38,7 +39,7 @@ jobs:
           git checkout main
           ecr="606191926999.dkr.ecr.us-east-1.amazonaws.com"
           image="c3-keycloak"
-          tag=keycloak-26.3.2-debian-12-r2-${GITHUB_SHA:0:7}"
+          tag="keycloak-26.3.2-debian-12-r2-${GITHUB_SHA:0:7}"
           environment_for_deployment="development"
 
           sed -i "/TO_BE_REPLACED_BY_RELEASE_PIPELINE/c\      image_tag: ${tag} # TO_BE_REPLACED_BY_RELEASE_PIPELINE" ./clusters/${environment_for_deployment}/overrides/keycloak.yaml
