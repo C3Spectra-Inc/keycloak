@@ -10,7 +10,7 @@ on:
 jobs:
   build_push:
     runs-on: 
-      labels: ubuntu-lates
+      labels: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
