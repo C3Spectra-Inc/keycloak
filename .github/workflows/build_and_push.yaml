@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - 'c3-26.3.2-bitnami'
-    paths:
-      - 'themes/**'
+    # paths:
+    #   - 'themes/**'
 
 jobs:
   build_push:
