@@ -8,9 +8,6 @@ on:
 jobs:
   build_push:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write        # for OIDC
-      contents: read
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 0 }
