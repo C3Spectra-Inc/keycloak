@@ -1,4 +1,4 @@
-name: ML Proxy build
+name: c3 keycloak build
 
 on:
   push:
