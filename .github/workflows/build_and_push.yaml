@@ -2,48 +2,53 @@ name: c3 keycloak build
 
 on:
   push:
-    branches: ['c3-26.3.2-bitnami']
-    # paths: ['themes/**']
+    branches:
+      - 'c3-26.3.2-bitnami'
+    paths:
+      - 'themes/**'
 
 jobs:
   build_push:
-    runs-on: ubuntu-latest
+    runs-on: 
+      labels: toolsEnv
+
     steps:
       - uses: actions/checkout@v3
-        with: { fetch-depth: 0 }
-
-      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: us-east-1
-          role-to-assume: arn:aws:iam::606191926999:role/<YOUR_GHA_OIDC_ROLE>
+          fetch-depth: 0
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        with:
-          mask-password: true
 
       - name: Docker build and push
         run: |
           tag="keycloak-26.3.2-debian-12-r2-${GITHUB_SHA:0:7}"
-          repo="606191926999.dkr.ecr.us-east-1.amazonaws.com/c3-keycloak"
-          docker build . -t "${repo}:${tag}"
-          docker push "${repo}:${tag}"
-
+          docker build . -t 606191926999.dkr.ecr.us-east-1.amazonaws.com/c3-keycloak:${tag}
+          docker push 606191926999.dkr.ecr.us-east-1.amazonaws.com/c3-keycloak:${tag}
   deploy:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: ubuntu-latest
     needs: build_push
     steps:
       - name: Deploy image to development
         run: |
           git clone https://ndacic:${{secrets.RUNNER_COMMIT_TOKEN}}@github.com/C3Spectra-Inc/Flux.git
           cd Flux
+
           git checkout main
+          ecr="606191926999.dkr.ecr.us-east-1.amazonaws.com"
+          image="c3-keycloak"
           tag="keycloak-26.3.2-debian-12-r2-${GITHUB_SHA:0:7}"
           environment_for_deployment="development"
+
           sed -i "/TO_BE_REPLACED_BY_RELEASE_PIPELINE/c\      image_tag: ${tag} # TO_BE_REPLACED_BY_RELEASE_PIPELINE" ./clusters/${environment_for_deployment}/overrides/keycloak.yaml
+
           git config --global user.email "release_pipeline@c3spectra.com"
           git config --global user.name "release_pipeline"
+          git config --global credential.helper cache
           git add .
           git commit -m "keycloak-dev-deployment flux CD"
           git push
+
+          
