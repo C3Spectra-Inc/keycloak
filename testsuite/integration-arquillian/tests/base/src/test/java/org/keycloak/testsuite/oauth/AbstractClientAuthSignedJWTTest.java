@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,6 +30,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyStore;
@@ -41,6 +43,7 @@ import java.security.interfaces.RSAKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -78,7 +81,6 @@ import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.authentication.authenticators.client.JWTClientAuthenticator;
 import org.keycloak.common.constants.ServiceAccountConstants;
 import org.keycloak.common.crypto.CryptoIntegration;
-import org.keycloak.common.util.Base64;
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.common.util.KeyUtils;
 import org.keycloak.common.util.KeycloakUriBuilder;
@@ -221,6 +223,7 @@ public abstract class AbstractClientAuthSignedJWTTest extends AbstractKeycloakTe
                 .id(KeycloakModelUtils.generateId())
                 .clientId("client3")
                 .directAccessGrants()
+                .redirectUris(OAuthClient.APP_ROOT + "/auth")
                 .authenticatorType(JWTClientAuthenticator.PROVIDER_ID)
                 .build();
 
@@ -230,22 +233,7 @@ public abstract class AbstractClientAuthSignedJWTTest extends AbstractKeycloakTe
     }
 
     public void testCodeToTokenRequestSuccess(String algorithm) throws Exception {
-        oauth.clientId("client2");
-        oauth.doLogin("test-user@localhost", "password");
-        EventRepresentation loginEvent = events.expectLogin()
-                .client("client2")
-                .assertEvent();
-
-        String code = oauth.parseLoginResponse().getCode();
-        AccessTokenResponse response = doAccessTokenRequest(code, getClient2SignedJWT(algorithm));
-
-        assertEquals(200, response.getStatusCode());
-        oauth.verifyToken(response.getAccessToken());
-        oauth.parseRefreshToken(response.getRefreshToken());
-        events.expectCodeToToken(loginEvent.getDetails().get(Details.CODE_ID), loginEvent.getSessionId())
-                .client("client2")
-                .detail(Details.CLIENT_AUTH_METHOD, JWTClientAuthenticator.PROVIDER_ID)
-                .assertEvent();
+        testCodeToTokenRequestSuccess("client2", getClient2KeyPair(), algorithm, null);
     }
 
     public void testCodeToTokenRequestSuccessForceAlgInClient(String algorithm) throws Exception {
@@ -294,8 +282,53 @@ public abstract class AbstractClientAuthSignedJWTTest extends AbstractKeycloakTe
         }
     }
 
+    public void testUploadCertificatePEM(KeyPair keyPair, String algorithm, String curve) throws Exception {
+        KeystoreUtils.assumeKeystoreTypeSupported(KeystoreFormat.BCFKS);
+        KeystoreUtils.KeystoreInfo ksInfo = KeystoreUtils.generateKeystore(folder, KeystoreFormat.BCFKS, "clientkey", "pwd2", "keypass", keyPair);
+        try {
+            Path tempFile = Files.createTempFile("cert_", ".pem");
+            try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
+                writer.write(ksInfo.getCertificateInfo().getCertificate());
+            }
+            testUploadKeystore(org.keycloak.services.resources.admin.ClientAttributeCertificateResource.CERTIFICATE_PEM,
+                    tempFile.toFile().getAbsolutePath(), "undefined", "undefined");
+            Files.delete(tempFile);
+
+            testCodeToTokenRequestSuccess("client3", keyPair, algorithm, curve);
+        } finally {
+            ksInfo.getKeystoreFile().delete();
+        }
+    }
+
+    protected void testUploadPublicKeyPem(KeyPair keyPair, String algorithm, String curve) throws Exception {
+        KeystoreUtils.assumeKeystoreTypeSupported(KeystoreFormat.BCFKS);
+        KeystoreUtils.KeystoreInfo ksInfo = KeystoreUtils.generateKeystore(folder, KeystoreFormat.BCFKS, "clientkey", "pwd2", "keypass", keyPair);
+        try {
+            Path tempFile = Files.createTempFile("pubkey_", ".pem");
+            try (BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
+                writer.write(ksInfo.getCertificateInfo().getPublicKey());
+            }
+            testUploadKeystore(org.keycloak.services.resources.admin.ClientAttributeCertificateResource.PUBLIC_KEY_PEM,
+                    tempFile.toFile().getAbsolutePath(), "undefined", "undefined");
+            Files.delete(tempFile);
+
+            testCodeToTokenRequestSuccess("client3", keyPair, algorithm, curve);
+        } finally {
+            ksInfo.getKeystoreFile().delete();
+        }
+    }
+
     protected void testCodeToTokenRequestSuccess(String algorithm, boolean useJwksUri) throws Exception {
         testCodeToTokenRequestSuccess(algorithm, null, useJwksUri);
+    }
+
+    private KeyPair setupKeyPair(ClientRepresentation clientRepresentation, ClientResource clientResource,
+            String algorithm, String curve, boolean useJwksUri) throws Exception {
+        if (useJwksUri) {
+            return setupJwksUrl(algorithm, curve, true, false, null, clientRepresentation, clientResource);
+        } else {
+            return setupJwks(algorithm, curve, clientRepresentation, clientResource);
+        }
     }
 
     protected void testCodeToTokenRequestSuccess(String algorithm, String curve, boolean useJwksUri) throws Exception {
@@ -303,34 +336,8 @@ public abstract class AbstractClientAuthSignedJWTTest extends AbstractKeycloakTe
         ClientResource clientResource = getClient(testRealm.getRealm(), clientRepresentation.getId());
         clientRepresentation = clientResource.toRepresentation();
         try {
-            // setup Jwks
-            KeyPair keyPair;
-            if (useJwksUri) {
-                keyPair = setupJwksUrl(algorithm, curve, true, false, null, clientRepresentation, clientResource);
-            } else {
-                keyPair = setupJwks(algorithm, curve, clientRepresentation, clientResource);
-            }
-            PublicKey publicKey = keyPair.getPublic();
-            PrivateKey privateKey = keyPair.getPrivate();
-
-            // test
-            oauth.clientId("client2");
-            oauth.doLogin("test-user@localhost", "password");
-            EventRepresentation loginEvent = events.expectLogin()
-                    .client("client2")
-                    .assertEvent();
-
-            String code = oauth.parseLoginResponse().getCode();
-            AccessTokenResponse response = doAccessTokenRequest(code,
-                    createSignedRequestToken("client2", getRealmInfoUrl(), privateKey, publicKey, algorithm, curve));
-
-            assertEquals(200, response.getStatusCode());
-            oauth.verifyToken(response.getAccessToken());
-            oauth.parseRefreshToken(response.getRefreshToken());
-            events.expectCodeToToken(loginEvent.getDetails().get(Details.CODE_ID), loginEvent.getSessionId())
-                    .client("client2")
-                    .detail(Details.CLIENT_AUTH_METHOD, JWTClientAuthenticator.PROVIDER_ID)
-                    .assertEvent();
+            KeyPair keyPair = setupKeyPair(clientRepresentation, clientResource, algorithm, curve, useJwksUri);
+            testCodeToTokenRequestSuccess("client2", keyPair, algorithm, curve);
         } finally {
             // Revert jwks settings
             if (useJwksUri) {
@@ -339,6 +346,30 @@ public abstract class AbstractClientAuthSignedJWTTest extends AbstractKeycloakTe
                 revertJwksSettings(clientRepresentation, clientResource);
             }
         }
+    }
+
+    protected void testCodeToTokenRequestSuccess(String clientId, KeyPair keyPair, String algorithm, String curve) throws Exception {
+        PublicKey publicKey = keyPair.getPublic();
+        PrivateKey privateKey = keyPair.getPrivate();
+
+        // test
+        oauth.realm("test").clientId(clientId);
+        oauth.doLogin("test-user@localhost", "password");
+        EventRepresentation loginEvent = events.expectLogin()
+                .client(clientId)
+                .assertEvent();
+
+        String code = oauth.parseLoginResponse().getCode();
+        AccessTokenResponse response = doAccessTokenRequest(code,
+                createSignedRequestToken(clientId, getRealmInfoUrl(), privateKey, publicKey, algorithm, curve));
+
+        assertEquals(200, response.getStatusCode());
+        oauth.verifyToken(response.getAccessToken());
+        oauth.parseRefreshToken(response.getRefreshToken());
+        events.expectCodeToToken(loginEvent.getDetails().get(Details.CODE_ID), loginEvent.getSessionId())
+                .client(clientId)
+                .detail(Details.CLIENT_AUTH_METHOD, JWTClientAuthenticator.PROVIDER_ID)
+                .assertEvent();
     }
 
     protected void testDirectGrantRequestSuccess(String algorithm) throws Exception {
@@ -920,8 +951,8 @@ public abstract class AbstractClientAuthSignedJWTTest extends AbstractKeycloakTe
         // It seems that PemUtils.decodePrivateKey, decodePublicKey can only treat RSA type keys, not EC type keys. Therefore, these are not used.
         String privateKeyBase64 = generatedKeys.get(TestingOIDCEndpointsApplicationResource.PRIVATE_KEY);
         String publicKeyBase64 =  generatedKeys.get(TestingOIDCEndpointsApplicationResource.PUBLIC_KEY);
-        PrivateKey privateKey = decodePrivateKey(Base64.decode(privateKeyBase64), algorithm, curve);
-        PublicKey publicKey = decodePublicKey(Base64.decode(publicKeyBase64), algorithm, curve);
+        PrivateKey privateKey = decodePrivateKey(Base64.getDecoder().decode(privateKeyBase64), algorithm, curve);
+        PublicKey publicKey = decodePublicKey(Base64.getDecoder().decode(publicKeyBase64), algorithm, curve);
         return new KeyPair(publicKey, privateKey);
     }
 

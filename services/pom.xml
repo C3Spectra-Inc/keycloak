@@ -81,7 +81,11 @@
             <groupId>org.twitter4j</groupId>
             <artifactId>twitter4j-core</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>${hibernate-validator.version}</version> <!--Not sure why we need to set it as it should be part of dependencyManagement-->
+        </dependency>
         <dependency>
             <groupId>org.jboss.logging</groupId>
             <artifactId>jboss-logging</artifactId>
@@ -182,6 +186,11 @@
             <artifactId>woodstox-core</artifactId>
             <version>${woodstox.version}</version>    <!-- this version has to match that of used in Wildfly -->
             <scope>test</scope>
+        </dependency>
+        <!-- YAML -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.jakarta.rs</groupId>
+            <artifactId>jackson-jakarta-rs-yaml-provider</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.zxing</groupId>

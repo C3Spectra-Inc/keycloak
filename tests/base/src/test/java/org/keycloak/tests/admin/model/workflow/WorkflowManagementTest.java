@@ -30,11 +30,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import com.fasterxml.jackson.jakarta.rs.yaml.JacksonYAMLProvider;
+import com.fasterxml.jackson.jakarta.rs.yaml.YAMLMediaTypes;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
 import org.hamcrest.Matchers;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -42,6 +50,8 @@ import java.io.IOException;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.BearerAuthFilter;
 import org.keycloak.admin.client.resource.WorkflowsResource;
 import org.keycloak.broker.oidc.KeycloakOIDCIdentityProviderFactory;
 import org.keycloak.common.util.Time;
@@ -52,6 +62,7 @@ import org.keycloak.models.workflow.DeleteUserStepProviderFactory;
 import org.keycloak.models.workflow.DisableUserStepProviderFactory;
 import org.keycloak.models.workflow.EventBasedWorkflowProviderFactory;
 import org.keycloak.models.workflow.NotifyUserStepProviderFactory;
+import org.keycloak.models.workflow.RestartWorkflowStepProviderFactory;
 import org.keycloak.models.workflow.WorkflowStep;
 import org.keycloak.models.workflow.ResourceOperationType;
 import org.keycloak.models.workflow.Workflow;
@@ -66,8 +77,9 @@ import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.workflows.WorkflowConstants;
 import org.keycloak.representations.workflows.WorkflowSetRepresentation;
 import org.keycloak.representations.workflows.WorkflowStepRepresentation;
-import org.keycloak.representations.workflows.WorkflowConditionRepresentation;
 import org.keycloak.representations.workflows.WorkflowRepresentation;
+import org.keycloak.testframework.annotations.InjectAdminClient;
+import org.keycloak.testframework.annotations.InjectKeycloakUrls;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.mail.MailServer;
 import org.keycloak.testframework.mail.annotations.InjectMailServer;
@@ -78,6 +90,7 @@ import org.keycloak.testframework.realm.UserConfigBuilder;
 import org.keycloak.testframework.remote.providers.runonserver.RunOnServer;
 import org.keycloak.testframework.remote.runonserver.InjectRunOnServer;
 import org.keycloak.testframework.remote.runonserver.RunOnServerClient;
+import org.keycloak.testframework.server.KeycloakUrls;
 import org.keycloak.tests.utils.MailUtils;
 
 @KeycloakIntegrationTest(config = WorkflowsServerConfig.class)
@@ -94,10 +107,17 @@ public class WorkflowManagementTest {
     @InjectMailServer
     private MailServer mailServer;
 
+    @InjectKeycloakUrls
+    KeycloakUrls keycloakUrls;
+
+    @InjectAdminClient(ref = "managed", realmRef = "managedRealm")
+    Keycloak adminClient;
+
     @Test
     public void testCreate() {
         WorkflowSetRepresentation expectedWorkflows = WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -127,6 +147,7 @@ public class WorkflowManagementTest {
     public void testCreateWithNoConditions() {
         WorkflowSetRepresentation expectedWorkflows = WorkflowRepresentation.create()
                 .of(EventBasedWorkflowProviderFactory.ID)
+                .name(EventBasedWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -147,6 +168,7 @@ public class WorkflowManagementTest {
     public void testCreateWithNoWorkflowSetDefaultWorkflow() {
         WorkflowSetRepresentation expectedWorkflows = WorkflowRepresentation.create()
                 .of(null)
+                .name("default-workflow")
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -172,18 +194,23 @@ public class WorkflowManagementTest {
 
         workflows.create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_ADD.toString())
-                .recurring()
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
+                .onEvent(ResourceOperationType.USER_ADDED.toString())
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
+                                .build(),
+                        WorkflowStepRepresentation.create().of(RestartWorkflowStepProviderFactory.ID)
                                 .build()
-                ).of(EventBasedWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_LOGIN.toString())
-                .recurring()
+                )
+                .of(EventBasedWorkflowProviderFactory.ID)
+                .name(EventBasedWorkflowProviderFactory.ID)
+                .onEvent(ResourceOperationType.USER_LOGGED_IN.toString())
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
+                                .build(),
+                        WorkflowStepRepresentation.create().of(RestartWorkflowStepProviderFactory.ID)
                                 .build()
                 ).build()).close();
 
@@ -204,7 +231,7 @@ public class WorkflowManagementTest {
             configureSessionContext(session);
             WorkflowsManager manager = new WorkflowsManager(session);
 
-            List<Workflow> registeredWorkflows = manager.getWorkflows();
+            List<Workflow> registeredWorkflows = manager.getWorkflows().toList();
             assertEquals(1, registeredWorkflows.size());
             WorkflowStateProvider stateProvider = session.getKeycloakSessionFactory().getProviderFactory(WorkflowStateProvider.class).create(session);
             List<ScheduledStep> steps = stateProvider.getScheduledStepsByWorkflow(id);
@@ -245,18 +272,14 @@ public class WorkflowManagementTest {
 
         // now let's try to update another property that we can't update
         String previousOn = workflow.getOn();
-        workflow.setOn(ResourceOperationType.USER_LOGIN.toString());
+        workflow.setOn(ResourceOperationType.USER_LOGGED_IN.toString());
         try (Response response = workflows.workflow(workflow.getId()).update(workflow)) {
             assertThat(response.getStatus(), is(Response.Status.BAD_REQUEST.getStatusCode()));
         }
 
         // restore previous value, but change the conditions
         workflow.setOn(previousOn);
-        workflow.setConditions(Collections.singletonList(
-                WorkflowConditionRepresentation.create().of(IdentityProviderWorkflowConditionFactory.ID)
-                        .withConfig(IdentityProviderWorkflowConditionFactory.EXPECTED_ALIASES, "someidp")
-                        .build()
-        ));
+        workflow.setConditions(IdentityProviderWorkflowConditionFactory.ID + "(someidp)");
         try (Response response = workflows.workflow(workflow.getId()).update(workflow)) {
             assertThat(response.getStatus(), is(Response.Status.BAD_REQUEST.getStatusCode()));
         }
@@ -274,7 +297,8 @@ public class WorkflowManagementTest {
     public void testWorkflowDoesNotFallThroughStepsInSingleRun() {
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_ADD.toString())
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
+                .onEvent(ResourceOperationType.USER_ADDED.toString())
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -292,12 +316,13 @@ public class WorkflowManagementTest {
             WorkflowsManager manager = new WorkflowsManager(session);
             UserModel user = session.users().getUserByUsername(realm,"testuser");
 
-            List<Workflow> registeredWorkflows = manager.getWorkflows();
+            List<Workflow> registeredWorkflows = manager.getWorkflows().toList();
             assertEquals(1, registeredWorkflows.size());
 
             Workflow workflow = registeredWorkflows.get(0);
-            assertEquals(2, manager.getSteps(workflow.getId()).size());
-            WorkflowStep notifyStep = manager.getSteps(workflow.getId()).get(0);
+            List<WorkflowStep> steps = manager.getSteps(workflow.getId()).toList();
+            assertEquals(2, steps.size());
+            WorkflowStep notifyStep = steps.get(0);
 
             WorkflowStateProvider stateProvider = session.getProvider(WorkflowStateProvider.class);
             ScheduledStep scheduledStep = stateProvider.getScheduledStep(workflow.getId(), user.getId());
@@ -312,7 +337,7 @@ public class WorkflowManagementTest {
                 user = session.users().getUserById(realm, user.getId());
 
                 // Verify that the next step was scheduled for the user
-                WorkflowStep disableStep = manager.getSteps(workflow.getId()).get(1);
+                WorkflowStep disableStep = manager.getSteps(workflow.getId()).toList().get(1);
                 scheduledStep = stateProvider.getScheduledStep(workflow.getId(), user.getId());
                 assertNotNull(scheduledStep, "A step should have been scheduled for the user " + user.getUsername());
                 assertEquals(disableStep.getId(), scheduledStep.stepId(), "The second step should have been scheduled");
@@ -349,11 +374,9 @@ public class WorkflowManagementTest {
 
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_FEDERATED_IDENTITY_ADD.name())
-                .onConditions(WorkflowConditionRepresentation.create()
-                        .of(IdentityProviderWorkflowConditionFactory.ID)
-                        .withConfig(IdentityProviderWorkflowConditionFactory.EXPECTED_ALIASES, "someidp")
-                        .build())
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
+                .onEvent(ResourceOperationType.USER_FEDERATED_IDENTITY_ADDED.name())
+                .onCondition(IdentityProviderWorkflowConditionFactory.ID + "(someidp)")
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -378,12 +401,13 @@ public class WorkflowManagementTest {
         runOnServer.run((RunOnServer) session -> {
             RealmModel realm = configureSessionContext(session);
             WorkflowsManager workflowsManager = new WorkflowsManager(session);
-            List<Workflow> registeredWorkflows = workflowsManager.getWorkflows();
+            List<Workflow> registeredWorkflows = workflowsManager.getWorkflows().toList();
             assertEquals(1, registeredWorkflows.size());
             Workflow workflow = registeredWorkflows.get(0);
 
-            assertEquals(2, workflowsManager.getSteps(workflow.getId()).size());
-            WorkflowStep notifyStep = workflowsManager.getSteps(workflow.getId()).get(0);
+            List<WorkflowStep> steps = workflowsManager.getSteps(workflow.getId()).toList();
+            assertEquals(2, steps.size());
+            WorkflowStep notifyStep = steps.get(0);
 
             // check no workflows are yet attached to the previous users, only to the ones created after the workflow was in place
             WorkflowStateProvider stateProvider = session.getKeycloakSessionFactory().getProviderFactory(WorkflowStateProvider.class).create(session);
@@ -402,7 +426,7 @@ public class WorkflowManagementTest {
                 workflowsManager.runScheduledSteps();
 
                 // check the same users are now scheduled to run the second step.
-                WorkflowStep disableStep = workflowsManager.getSteps(workflow.getId()).get(1);
+                WorkflowStep disableStep = workflowsManager.getSteps(workflow.getId()).toList().get(1);
                 scheduledSteps = stateProvider.getScheduledStepsByWorkflow(workflow);
                 assertEquals(3, scheduledSteps.size());
                 scheduledSteps.forEach(scheduledStep -> {
@@ -413,7 +437,7 @@ public class WorkflowManagementTest {
                 });
 
                 // assign the workflow to the eligible users - i.e. only users from the same idp who are not yet assigned to the workflow.
-                workflowsManager.scheduleAllEligibleResources(workflow);
+                workflowsManager.bindToAllEligibleResources(workflow);
 
                 // check workflow was correctly assigned to the old users, not affecting users already associated with the workflow.
                 scheduledSteps = stateProvider.getScheduledStepsByWorkflow(workflow);
@@ -448,7 +472,7 @@ public class WorkflowManagementTest {
         // create a test workflow
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_ADD.toString())
+                .onEvent(ResourceOperationType.USER_ADDED.toString())
                 .name("test-workflow")
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
@@ -501,7 +525,7 @@ public class WorkflowManagementTest {
             RealmModel realm = configureSessionContext(session);
             WorkflowsManager manager = new WorkflowsManager(session);
 
-            List<Workflow> registeredWorkflow = manager.getWorkflows();
+            List<Workflow> registeredWorkflow = manager.getWorkflows().toList();
             assertEquals(1, registeredWorkflow.size());
             WorkflowStateProvider stateProvider = session.getKeycloakSessionFactory().getProviderFactory(WorkflowStateProvider.class).create(session);
             List<ScheduledStep> scheduledSteps = stateProvider.getScheduledStepsByWorkflow(registeredWorkflow.get(0));
@@ -564,11 +588,13 @@ public class WorkflowManagementTest {
     public void testRecurringWorkflow() {
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_ADD.toString())
-                .recurring()
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
+                .onEvent(ResourceOperationType.USER_ADDED.toString())
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
+                                .build(),
+                        WorkflowStepRepresentation.create().of(RestartWorkflowStepProviderFactory.ID)
                                 .build()
                 ).build()).close();
 
@@ -584,8 +610,8 @@ public class WorkflowManagementTest {
                 manager.runScheduledSteps();
 
                 UserModel user = session.users().getUserByUsername(realm, "testuser");
-                Workflow workflow = manager.getWorkflows().get(0);
-                WorkflowStep step = manager.getSteps(workflow.getId()).get(0);
+                Workflow workflow = manager.getWorkflows().toList().get(0);
+                WorkflowStep step = manager.getSteps(workflow.getId()).toList().get(0);
 
                 // Verify that the step was scheduled again for the user
                 WorkflowStateProvider stateProvider = session.getProvider(WorkflowStateProvider.class);
@@ -610,6 +636,7 @@ public class WorkflowManagementTest {
         // create a test workflow with no time conditions - should run immediately when scheduled
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(SetUserAttributeStepProviderFactory.ID)
                                 .withConfig("message", "message")
@@ -637,6 +664,7 @@ public class WorkflowManagementTest {
     public void testFailCreateWorkflowWithNegativeTime() {
         WorkflowSetRepresentation workflows = WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(SetUserAttributeStepProviderFactory.ID)
                                 .after(Duration.ofDays(-5))
@@ -654,6 +682,7 @@ public class WorkflowManagementTest {
         // Create workflow: disable at 10 days, notify 3 days before (at day 7)
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(7))
@@ -692,6 +721,7 @@ public class WorkflowManagementTest {
         // Create workflow: delete at 30 days, notify 15 days before (at day 15)
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(15))
@@ -730,6 +760,7 @@ public class WorkflowManagementTest {
         // Create workflow: disable at 7 days, notify 2 days before (at day 5) with custom message
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -768,6 +799,7 @@ public class WorkflowManagementTest {
     public void testNotifyUserStepSkipsUsersWithoutEmailButLogsWarning() {
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -807,6 +839,7 @@ public class WorkflowManagementTest {
         // Create workflow: just disable at 30 days with one notification before
         managedRealm.admin().workflows().create(WorkflowRepresentation.create()
                 .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name(UserCreationTimeWorkflowProviderFactory.ID)
                 .withSteps(
                         WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
                                 .after(Duration.ofDays(15))
@@ -853,6 +886,59 @@ public class WorkflowManagementTest {
         verifyEmailContent(testUserMessage, "testuser5@example.com", "Disable", "TestUser5", "15", "inactivity");
 
         mailServer.runCleanup();
+    }
+
+    @Test
+    public void testCreateUsingYaml() throws IOException {
+        YAMLMapper yamlMapper = YAMLMapper.builder().serializationInclusion(Include.NON_NULL).build();
+        WorkflowRepresentation expected = WorkflowRepresentation.create()
+                .of(UserCreationTimeWorkflowProviderFactory.ID)
+                .name("test")
+                .withSteps(
+                        WorkflowStepRepresentation.create().of(NotifyUserStepProviderFactory.ID)
+                                .after(Duration.ofDays(5))
+                                .build(),
+                        WorkflowStepRepresentation.create().of(DisableUserStepProviderFactory.ID)
+                                .after(Duration.ofDays(5))
+                                .build()
+                ).build().getWorkflows().get(0);
+
+        try (Client httpClient = Keycloak.getClientProvider().newRestEasyClient(null, null, true)) {
+            httpClient.register(JacksonYAMLProvider.class);
+            WebTarget workflowsApi = httpClient.target(keycloakUrls.getBaseUrl().toString())
+                    .path("admin")
+                    .path("realms")
+                    .path(managedRealm.getName())
+                    .path("workflows")
+                    .register(new BearerAuthFilter(adminClient.tokenManager()));
+
+            try (Response response = workflowsApi.request().post(Entity.entity(yamlMapper.writeValueAsString(expected),
+                    YAMLMediaTypes.APPLICATION_JACKSON_YAML))) {
+                assertEquals(Status.CREATED.getStatusCode(), response.getStatus());
+            }
+
+            try (Response response = workflowsApi.request().accept(YAMLMediaTypes.APPLICATION_JACKSON_YAML).get()) {
+                assertEquals(Status.OK.getStatusCode(), response.getStatus());
+                List<WorkflowRepresentation> workflows = yamlMapper.readValue(response.readEntity(String.class),
+                        new TypeReference<>() {
+                        });
+                assertFalse(workflows.isEmpty());
+                expected = workflows.get(0);
+            }
+
+            try (Response response = workflowsApi.path(expected.getId()).request()
+                    .accept(YAMLMediaTypes.APPLICATION_JACKSON_YAML).get()) {
+                assertEquals(Status.OK.getStatusCode(), response.getStatus());
+                WorkflowRepresentation actual = yamlMapper.readValue(response.readEntity(String.class), WorkflowRepresentation.class);
+                assertEquals(expected.getId(), actual.getId());
+                assertEquals(expected.getName(), actual.getName());
+            }
+
+            try (Response response = workflowsApi.path(expected.getId()).request()
+                    .put(Entity.entity(yamlMapper.writeValueAsString(expected), YAMLMediaTypes.APPLICATION_JACKSON_YAML))) {
+                assertEquals(Status.NO_CONTENT.getStatusCode(), response.getStatus());
+            }
+        }
     }
 
     public static List<MimeMessage> findEmailsByRecipient(MailServer mailServer, String expectedRecipient) {

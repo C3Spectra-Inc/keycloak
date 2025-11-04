@@ -87,7 +87,6 @@ import org.keycloak.testsuite.Assert;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.runonserver.RunOnServerException;
 import org.keycloak.testsuite.util.AdminClientUtil;
-import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
 import org.keycloak.testsuite.util.oauth.OAuthClient;
 import org.keycloak.util.JsonSerialization;
 
@@ -116,7 +115,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.keycloak.jose.jwe.JWEConstants.A128GCM;
+import static org.junit.Assert.fail;
 import static org.keycloak.jose.jwe.JWEConstants.A256GCM;
 import static org.keycloak.jose.jwe.JWEConstants.RSA_OAEP;
 import static org.keycloak.jose.jwe.JWEConstants.RSA_OAEP_256;
@@ -134,6 +133,7 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
 
     private static final Logger LOGGER = Logger.getLogger(OID4VCIssuerEndpointTest.class);
 
+    protected static ClientScopeRepresentation sdJwtTypeNaturalPersonClientScope;
     protected static ClientScopeRepresentation sdJwtTypeCredentialClientScope;
     protected static ClientScopeRepresentation jwtTypeCredentialClientScope;
     protected static ClientScopeRepresentation minimalJwtTypeCredentialClientScope;
@@ -147,9 +147,9 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
 
     protected static String prepareSessionCode(KeycloakSession session, AppAuthManager.BearerTokenAuthenticator authenticator, String note) {
         AuthenticationManager.AuthResult authResult = authenticator.authenticate();
-        UserSessionModel userSessionModel = authResult.getSession();
+        UserSessionModel userSessionModel = authResult.session();
         AuthenticatedClientSessionModel authenticatedClientSessionModel = userSessionModel.getAuthenticatedClientSessionByClient(
-                authResult.getClient().getId());
+                authResult.client().getId());
         String codeId = SecretGenerator.getInstance().randomString();
         String nonce = SecretGenerator.getInstance().randomString();
         OAuth2Code oAuth2Code = new OAuth2Code(codeId,
@@ -200,6 +200,9 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         CryptoIntegration.init(this.getClass().getClassLoader());
         httpClient = HttpClientBuilder.create().build();
         client = testRealm().clients().findByClientId(clientId).get(0);
+
+        // Lookup the pre-installed oid4vc_natural_person client scope
+        sdJwtTypeNaturalPersonClientScope = requireExistingClientScope(sdJwtTypeNaturalPersonScopeName);
 
         // Register the optional client scopes
         sdJwtTypeCredentialClientScope = registerOptionalClientScope(sdJwtTypeCredentialScopeName,
@@ -307,6 +310,19 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         }
         clientScope.setProtocolMappers(protocolMappers);
         return clientScope;
+    }
+
+    private ClientScopeRepresentation requireExistingClientScope(String scopeName) {
+
+        // Check if the client scope already exists
+        List<ClientScopeRepresentation> existingScopes = testRealm().clientScopes().findAll();
+        for (ClientScopeRepresentation existingScope : existingScopes) {
+            if (existingScope.getName().equals(scopeName)) {
+                return existingScope; // Reuse existing scope
+            }
+        }
+        fail("No such client scope: " + scopeName);
+        return null;
     }
 
     private List<ProtocolMapperRepresentation> resolveProtocolMappers(String protocolMapperReferenceFile) {

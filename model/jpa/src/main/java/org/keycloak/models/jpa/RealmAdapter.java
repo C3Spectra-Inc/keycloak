@@ -1316,7 +1316,7 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
 
     @Override
     public Stream<IdentityProviderModel> getIdentityProvidersStream() {
-        return session.identityProviders().getAllStream();
+        return session.identityProviders().getAllStream(IdentityProviderQuery.userAuthentication());
     }
 
     @Override
@@ -1854,7 +1854,6 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
         action.setPriority(model.getPriority());
         realm.getRequiredActionProviders().add(action);
         em.persist(action);
-        em.flush();
         model.setId(action.getId());
         return model;
     }

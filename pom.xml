@@ -92,6 +92,7 @@
         <hibernate-orm.plugin.version>6.2.13.Final</hibernate-orm.plugin.version>
         <hibernate.c3p0.version>6.2.13.Final</hibernate.c3p0.version>
         <infinispan.version>15.0.19.Final</infinispan.version>
+        <hibernate-validator.version>9.0.1.Final</hibernate-validator.version>
         <protostream.version>5.0.14.Final</protostream.version> <!-- For the annotation processor: keep in sync with the version shipped with Infinispan -->
         <protostream.plugin.version>${protostream.version}</protostream.plugin.version>
 
@@ -126,7 +127,7 @@
         <woodstox.version>6.0.3</woodstox.version>
         <wildfly.common.quarkus.aligned.version>1.5.4.Final-format-001</wildfly.common.quarkus.aligned.version>
         <wildfly.common.wildfly.aligned.version>1.6.0.Final</wildfly.common.wildfly.aligned.version>
-        <xmlsec.version>2.2.6</xmlsec.version>
+        <xmlsec.version>3.0.4</xmlsec.version>
         <nashorn.version>15.4</nashorn.version>
         <ua-parser.version>1.6.1</ua-parser.version>
         <org.yaml.snakeyaml.version>2.0</org.yaml.snakeyaml.version>
@@ -207,6 +208,7 @@
         <smallrye.openapi.generator.plugin.version>3.6.2</smallrye.openapi.generator.plugin.version>
         <openapi.generator.plugin.version>6.3.0</openapi.generator.plugin.version>
         <build-helper-maven-plugin.version>3.2.0</build-helper-maven-plugin.version>
+        <spotless-plugin.version>3.0.0</spotless-plugin.version>
 
         <!-- Surefire Settings -->
         <surefire.memory.Xms>512m</surefire.memory.Xms>
@@ -226,6 +228,8 @@
 
         <!-- Used to test SAML Galleon feature-pack layers discovery -->
         <version.org.wildfly.glow>1.0.0.Alpha8</version.org.wildfly.glow>
+
+        <org.mapstruct.version>1.6.3</org.mapstruct.version>
 
         <!-- Galleon -->
         <galleon.fork.embedded>true</galleon.fork.embedded>
@@ -397,6 +401,11 @@
                 <groupId>org.glassfish.jaxb</groupId>
                 <artifactId>xsom</artifactId>
                 <version>${org.glassfish.jaxb.xsom.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${org.mapstruct.version}</version>
             </dependency>
 
             <dependency>
@@ -589,6 +598,11 @@
                 <groupId>com.h2database</groupId>
                 <artifactId>h2</artifactId>
                 <version>${h2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.hibernate.validator</groupId>
+                <artifactId>hibernate-validator</artifactId>
+                <version>${hibernate-validator.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.hibernate.orm</groupId>
@@ -1128,6 +1142,21 @@
             </dependency>
             <dependency>
                 <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-admin-v2-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-admin-v2-providers</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-admin-v2-rest</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak</groupId>
                 <artifactId>keycloak-saml-wildfly-modules</artifactId>
                 <version>${project.version}</version>
                 <type>zip</type>
@@ -1518,8 +1547,19 @@
                         <skip>${skipProtoLock}</skip>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>com.diffplug.spotless</groupId>
+                    <artifactId>spotless-maven-plugin</artifactId>
+                    <version>${spotless-plugin.version}</version>
+                    <configuration>
+                        <java>
+                            <removeUnusedImports />
+                        </java>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
+
     </build>
 
     <profiles>

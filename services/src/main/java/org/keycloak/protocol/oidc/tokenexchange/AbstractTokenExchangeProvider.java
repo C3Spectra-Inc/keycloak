@@ -19,6 +19,7 @@
 package org.keycloak.protocol.oidc.tokenexchange;
 
 import org.jboss.logging.Logger;
+import org.keycloak.models.IdentityProviderQuery;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
@@ -28,6 +29,7 @@ import org.keycloak.broker.provider.IdentityBrokerException;
 import org.keycloak.broker.provider.IdentityProvider;
 import org.keycloak.broker.provider.IdentityProviderMapper;
 import org.keycloak.broker.provider.IdentityProviderMapperSyncModeDelegate;
+import org.keycloak.broker.provider.UserAuthenticationIdentityProvider;
 import org.keycloak.common.ClientConnection;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
@@ -63,6 +65,7 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 
 import static org.keycloak.authentication.authenticators.util.AuthenticatorUtils.getDisabledByBruteForceEventError;
+import static org.keycloak.models.IdentityProviderType.EXCHANGE_EXTERNAL_TOKEN;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -300,8 +303,8 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
         externalExchangeContext.provider().exchangeExternalComplete(userSession, context, formParams);
 
         // this must exist so that we can obtain access token from user session if idp's store tokens is off
-        userSession.setNote(IdentityProvider.EXTERNAL_IDENTITY_PROVIDER, externalExchangeContext.idpModel().getAlias());
-        userSession.setNote(IdentityProvider.FEDERATED_ACCESS_TOKEN, subjectToken);
+        userSession.setNote(UserAuthenticationIdentityProvider.EXTERNAL_IDENTITY_PROVIDER, externalExchangeContext.idpModel().getAlias());
+        userSession.setNote(UserAuthenticationIdentityProvider.FEDERATED_ACCESS_TOKEN, subjectToken);
 
         context.addSessionNotesToUserSession(userSession);
 
@@ -448,7 +451,7 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
         } catch (IdentityBrokerException ignore) {
         }
 
-        return session.identityProviders().getAllStream().map(idpModel -> {
+        return session.identityProviders().getAllStream(IdentityProviderQuery.type(EXCHANGE_EXTERNAL_TOKEN)).map(idpModel -> {
             IdentityProvider<?> idp = IdentityBrokerService.getIdentityProvider(session, idpModel.getAlias());
 
             if (idp instanceof ExchangeExternalToken external && external.isIssuer(alias, formParams)) {

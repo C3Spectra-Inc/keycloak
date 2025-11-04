@@ -589,4 +589,117 @@ public class RequiredActionUpdateEmailTestWithVerificationTest extends AbstractR
             ApiUtil.removeUserByUsername(testRealm(), "realmverifyuser");
         }
     }
+
+    @Test
+    public void testUpdateProfileWithVerificationWhenEmailIsNotSetAndIsWritable() throws MessagingException, IOException {
+        configureRequiredActionsToUser("test-user@localhost", RequiredAction.UPDATE_PROFILE.name());
+        UserResource testUser = testRealm().users().get(findUser("test-user@localhost").getId());
+        assertEquals(1, testUser.toRepresentation().getRequiredActions().size());
+        UserRepresentation rep = testUser.toRepresentation();
+        rep.setEmail("");
+        testUser.update(rep);
+
+        // login and update profile, email is empty and writable, so email input should be present
+        loginPage.open();
+        loginPage.login("test-user@localhost", "password");
+        updateProfilePage.assertCurrent();
+        assertTrue(updateProfilePage.isEmailInputPresent());
+        updateProfilePage.update("Tom", "Brady", "test-user@localhost");
+
+        // Should send verification email and show pending verification message
+        assertThat("Should show pending verification message with realm verification enabled",
+                driver.getPageSource(), containsString("A confirmation email has been sent to test-user@localhost."));
+        String confirmationLink = fetchEmailConfirmationLink("test-user@localhost");
+        rep = testUser.toRepresentation();
+        assertEquals(1, rep.getRequiredActions().size());
+        assertEquals(RequiredAction.UPDATE_EMAIL.name(), rep.getRequiredActions().get(0));
+        assertEquals("test-user@localhost", testUser.toRepresentation().getAttributes().get(UserModel.EMAIL_PENDING).get(0));
+        assertNull(testUser.toRepresentation().getEmail());
+
+        // confirm the email and authenticate to the app
+        driver.navigate().to(confirmationLink);
+        infoPage.assertCurrent();
+        infoPage.clickBackToApplicationLink();
+        appPage.assertCurrent();
+    }
+
+    @Test
+    public void testEmailVerificationCancelledByAdmin() throws Exception {
+        configureRequiredActionsToUser("test-user@localhost", UserModel.RequiredAction.UPDATE_EMAIL.name());
+
+        loginPage.open();
+
+        loginPage.login("test-user@localhost", "password");
+        updateEmailPage.assertCurrent();
+        updateEmailPage.changeEmail("new@localhost");
+
+        events.expect(EventType.SEND_VERIFY_EMAIL).detail(Details.EMAIL, "new@localhost").assertEvent();
+        
+        // Verify EMAIL_PENDING attribute is set
+        UserRepresentation user = ActionUtil.findUserWithAdminClient(adminClient, "test-user@localhost");
+        Map<String, List<String>> attributes = user.getAttributes();
+        assertEquals("EMAIL_PENDING should contain new email", "new@localhost", attributes.get(UserModel.EMAIL_PENDING).get(0));
+        assertTrue("User should have UPDATE_EMAIL required action", user.getRequiredActions().contains(UserModel.RequiredAction.UPDATE_EMAIL.name()));
+
+        String confirmationLink = fetchEmailConfirmationLink("new@localhost");
+        assertNotNull("Should have received verification email", confirmationLink);
+        
+        // Admin sets EMAIL_PENDING to empty string (simulating admin UI removal)
+        user.singleAttribute(UserModel.EMAIL_PENDING, "");
+        testRealm().users().get(user.getId()).update(user);
+
+        driver.navigate().to(confirmationLink);
+
+        errorPage.assertCurrent();
+        assertEquals("This email verification has been cancelled by an administrator.", errorPage.getError());
+    }
+
+    @Test
+    public void testUpdateEmailVerificationResendTooFast() throws Exception {
+        UserRepresentation testUser = testRealm().users().search("test-user@localhost").get(0);
+        
+        loginPage.open();
+        loginPage.login("test-user@localhost", "password");
+
+        updateEmailPage.assertCurrent();
+        updateEmailPage.changeEmail("newemail@localhost");
+        
+        // First email should be sent
+        assertEquals(1, greenMail.getReceivedMessages().length);
+        assertThat("Should show pending verification message",
+                driver.getPageSource(), containsString("A confirmation email has been sent to newemail@localhost."));
+
+        // Logout and login again to get back to update email page for resend
+        testRealm().users().get(testUser.getId()).logout();
+        loginPage.open();
+        loginPage.login("test-user@localhost", "password");
+        updateEmailPage.assertCurrent();
+
+        // Try to resend immediately - should be blocked by cooldown
+        updateEmailPage.changeEmail("newemail@localhost");
+        assertThat("Should show cooldown error message", 
+                driver.getPageSource(), containsString("You must wait"));
+        assertEquals("Email should not be sent again due to cooldown", 1, greenMail.getReceivedMessages().length);
+        
+        // Check that email field is pre-filled with the pending email after cooldown error
+        assertEquals("Email field should be pre-filled with pending email during cooldown", 
+                "newemail@localhost", updateEmailPage.getEmail());
+
+        try {
+            // Move time forward beyond cooldown period (default 30 seconds)
+            setTimeOffset(40);
+            
+            // Logout and login again to retry after cooldown
+            testRealm().users().get(testUser.getId()).logout();
+            loginPage.open();
+            loginPage.login("test-user@localhost", "password");
+            updateEmailPage.assertCurrent();
+            
+            // Now resend should work
+            updateEmailPage.changeEmail("newemail@localhost");
+            assertEquals("Second email should be sent after cooldown expires", 2, greenMail.getReceivedMessages().length);
+        } finally {
+            setTimeOffset(0);
+        }
+    }
 }

@@ -13,7 +13,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.common.util.KeystoreUtil;
@@ -54,7 +53,6 @@ import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
 import org.keycloak.testsuite.util.oauth.LogoutResponse;
 import org.keycloak.testsuite.util.oauth.OAuthClient;
-import org.keycloak.util.JsonSerialization;
 import org.openqa.selenium.WebDriver;
 
 import java.io.IOException;
@@ -105,7 +103,7 @@ public class HoKTest extends AbstractTestRealmKeycloakTest {
                     //.detail(Details.AUTH_TYPE, AuthorizationEndpoint.CODE_AUTH_TYPE)
                     .detail(Details.REDIRECT_URI, defaultRedirectUri)
                     .detail(Details.CONSENT, Details.CONSENT_VALUE_NO_CONSENT_REQUIRED)
-                    .session(isUUID());
+                    .session(isSessionId());
         }
     }
 

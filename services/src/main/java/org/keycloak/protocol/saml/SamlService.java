@@ -68,7 +68,6 @@ import org.keycloak.protocol.saml.preprocessor.SamlAuthenticationPreprocessor;
 import org.keycloak.protocol.saml.profile.ecp.SamlEcpProfileService;
 import org.keycloak.protocol.saml.profile.util.Soap;
 import org.keycloak.protocol.saml.util.ArtifactBindingUtils;
-import org.keycloak.rotation.HardcodedKeyLocator;
 import org.keycloak.rotation.KeyLocator;
 import org.keycloak.saml.BaseSAML2BindingBuilder;
 import org.keycloak.saml.SAML2LogoutResponseBuilder;
@@ -133,7 +132,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.PublicKey;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -232,7 +230,7 @@ public class SamlService extends AuthorizationEndpointBase {
                 return error(session, null, Response.Status.BAD_REQUEST, Messages.INVALID_REQUEST);
             }
             // assume this is a logout response
-            UserSessionModel userSession = authResult.getSession();
+            UserSessionModel userSession = authResult.session();
             if (userSession.getState() != UserSessionModel.State.LOGGING_OUT) {
                 logger.warn("Unknown saml response.");
                 logger.warn("UserSession is not tagged as logging out.");
@@ -569,7 +567,7 @@ public class SamlService extends AuthorizationEndpointBase {
                 boolean postBinding = Objects.equals(SamlProtocol.SAML_POST_BINDING, logoutBinding);
 
                 String bindingUri = SamlProtocol.getLogoutServiceUrl(session, client, logoutBinding, false);
-                UserSessionModel userSession = authResult.getSession();
+                UserSessionModel userSession = authResult.session();
                 userSession.setNote(SamlProtocol.SAML_LOGOUT_BINDING_URI, bindingUri);
                 if (samlClient.requiresRealmSignature()) {
                     userSession.setNote(SamlProtocol.SAML_LOGOUT_SIGNATURE_ALGORITHM, samlClient.getSignatureAlgorithm().toString());

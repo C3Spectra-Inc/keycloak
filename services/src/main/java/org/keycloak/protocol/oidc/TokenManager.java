@@ -20,6 +20,7 @@ package org.keycloak.protocol.oidc;
 import java.util.Collections;
 import java.util.HashMap;
 import org.jboss.logging.Logger;
+import org.keycloak.models.IdentityProviderQuery;
 import org.keycloak.broker.oidc.OIDCIdentityProviderConfig;
 import org.keycloak.common.Profile.Feature;
 import org.keycloak.common.util.SecretGenerator;
@@ -224,6 +225,10 @@ public class TokenManager {
             throw new OAuthErrorException(OAuthErrorException.INVALID_GRANT, "Stale token");
         }
 
+        if (userSession.isOffline() && !UserSessionUtil.isOfflineAccessGranted(session, clientSession)) {
+            throw new OAuthErrorException(OAuthErrorException.INVALID_GRANT, "Offline session invalid because offline access not granted anymore");
+        }
+
         // Case when offline token is migrated from previous version
         if (oldTokenScope == null && userSession.isOffline()) {
             logger.debugf("Migrating offline token of user '%s' for client '%s' of realm '%s'", user.getUsername(), client.getClientId(), realm.getName());
@@ -314,6 +319,7 @@ public class TokenManager {
 
 
         TokenValidation validation = validateToken(session, uriInfo, connection, realm, refreshToken, headers, oldTokenScope);
+        session.getContext().setUserSession(validation.userSession);
         AuthenticatedClientSessionModel clientSession = validation.clientSessionCtx.getClientSession();
         OIDCAdvancedConfigWrapper clientConfig = OIDCAdvancedConfigWrapper.fromClientModel(authorizedClient);
 
@@ -1529,8 +1535,8 @@ public class TokenManager {
     private Stream<OIDCIdentityProvider> getOIDCIdentityProviders(LogoutToken logoutToken, KeycloakSession session) {
         try {
             return session.identityProviders()
-                    .getAllStream(Map.of(
-                            OIDCIdentityProviderConfig.ISSUER, logoutToken.getIssuer()
+                    .getAllStream(IdentityProviderQuery.userAuthentication()
+                            .with(OIDCIdentityProviderConfig.ISSUER, logoutToken.getIssuer()
                     ), -1, -1)
                     .map(model -> {
                         var idp = IdentityBrokerService.getIdentityProvider(session, model.getAlias());

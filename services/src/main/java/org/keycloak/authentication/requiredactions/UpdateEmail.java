@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
@@ -60,6 +61,7 @@ import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
 import org.keycloak.services.Urls;
+import org.keycloak.services.messages.Messages;
 import org.keycloak.services.validation.Validation;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.userprofile.EventAuditingAttributeChangeListener;
@@ -67,6 +69,7 @@ import org.keycloak.userprofile.UserProfile;
 import org.keycloak.userprofile.UserProfileContext;
 import org.keycloak.userprofile.UserProfileProvider;
 import org.keycloak.userprofile.ValidationException;
+import org.keycloak.authentication.requiredactions.util.EmailCooldownManager;
 
 public class UpdateEmail implements RequiredActionProvider, RequiredActionFactory, EnvironmentDependentProviderFactory {
 
@@ -74,6 +77,7 @@ public class UpdateEmail implements RequiredActionProvider, RequiredActionFactor
 
     public static final String CONFIG_VERIFY_EMAIL = "verifyEmail";
     private static final String FORCE_EMAIL_VERIFICATION = "forceEmailVerification";
+    public static final String EMAIL_RESEND_COOLDOWN_KEY_PREFIX = "update-email-cooldown-";
 
     public static boolean isEnabled(RealmModel realm) {
         if (realm == null) {
@@ -157,7 +161,6 @@ public class UpdateEmail implements RequiredActionProvider, RequiredActionFactor
             if (newEmail != null) {
                 // Remove VERIFY_EMAIL to ensure UPDATE_EMAIL takes precedence when both realm verification and forced verification are enabled.
                 user.removeRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
-                setPendingEmailVerification(context, newEmail);
                 sendEmailUpdateConfirmation(context, false);
             } else {
                 // Check if email verification is pending and show message for subsequent visits
@@ -211,6 +214,22 @@ public class UpdateEmail implements RequiredActionProvider, RequiredActionFactor
     }
 
     private void sendEmailUpdateConfirmation(RequiredActionContext context, boolean logoutSessions) {
+        // Check rate limiting cooldown
+        Long remaining = EmailCooldownManager.retrieveCooldownEntry(context, EMAIL_RESEND_COOLDOWN_KEY_PREFIX);
+        if (remaining != null) {
+            // Pre-fill form with pending email during cooldown
+            String pendingEmail = getPendingEmailVerification(context);
+            MultivaluedMap<String, String> formDataWithPendingEmail = new MultivaluedHashMap<>();
+            if (pendingEmail != null) {
+                formDataWithPendingEmail.putSingle(UserModel.EMAIL, pendingEmail);
+            }
+            context.challenge(context.form()
+                    .setError(Messages.COOLDOWN_VERIFICATION_EMAIL, remaining)
+                    .setFormData(formDataWithPendingEmail)
+                    .createResponse(UserModel.RequiredAction.UPDATE_EMAIL));
+            return;
+        }
+
         UserModel user = context.getUser();
         String oldEmail = user.getEmail();
         String newEmail = context.getHttpRequest().getDecodedFormParameters().getFirst(UserModel.EMAIL);
@@ -238,9 +257,16 @@ public class UpdateEmail implements RequiredActionProvider, RequiredActionFactor
         } catch (EmailException e) {
             logger.error("Failed to send email for email update", e);
             context.getEvent().error(Errors.EMAIL_SEND_FAILED);
+            context.failure(Messages.EMAIL_SENT_ERROR);
+            context.challenge(context.form()
+                    .setError(Messages.EMAIL_SENT_ERROR)
+                    .createErrorPage(Response.Status.INTERNAL_SERVER_ERROR));
             return;
         }
         context.getEvent().success();
+
+        // Add cooldown entry after successful email send
+        EmailCooldownManager.addCooldownEntry(context, EMAIL_RESEND_COOLDOWN_KEY_PREFIX);
 
         setPendingEmailVerification(context, newEmail);
 
@@ -314,7 +340,9 @@ public class UpdateEmail implements RequiredActionProvider, RequiredActionFactor
                 .helpText("If enabled, the user will be forced to verify the email regardless if email verification is enabled at the realm level or not. Otherwise, verification will be based on the realm level setting.")
                 .type(ProviderConfigProperty.BOOLEAN_TYPE)
                 .defaultValue(Boolean.FALSE)
-                .add().build());
+                .add()
+                .build());
+        config.add(EmailCooldownManager.createCooldownConfigProperty());
 
         return config;
     }

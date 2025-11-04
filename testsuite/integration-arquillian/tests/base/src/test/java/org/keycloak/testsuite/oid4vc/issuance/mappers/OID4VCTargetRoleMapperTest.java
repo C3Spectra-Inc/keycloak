@@ -21,10 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
 import org.keycloak.models.ProtocolMapperModel;
 import org.keycloak.models.UserSessionModel;
-import org.keycloak.protocol.oid4vc.issuance.credentialbuilder.LDCredentialBody;
 import org.keycloak.protocol.oid4vc.issuance.mappers.OID4VCTargetRoleMapper;
-import org.keycloak.protocol.oid4vc.issuance.signing.JwtCredentialSigner;
-import org.keycloak.protocol.oid4vc.model.CredentialBuildConfig;
 import org.keycloak.protocol.oid4vc.model.Role;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
@@ -64,7 +61,7 @@ public class OID4VCTargetRoleMapperTest extends OID4VCTest {
 						roleMapper.setMapperModel(pmm, "jwt_vc");
 						AppAuthManager.BearerTokenAuthenticator authenticator = new AppAuthManager.BearerTokenAuthenticator(session);
 						authenticator.setTokenString(token);
-						UserSessionModel userSessionModel = authenticator.authenticate().getSession();
+						UserSessionModel userSessionModel = authenticator.authenticate().session();
 						roleMapper.setClaimsForSubject(claimsMap, userSessionModel);
 						assertTrue("The roles should be included as a claim.", claimsMap.containsKey("roles"));
 						if (claimsMap.get("roles") instanceof HashSet roles) {

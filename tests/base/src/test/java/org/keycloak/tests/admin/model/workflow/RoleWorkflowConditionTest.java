@@ -5,11 +5,9 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.keycloak.models.workflow.conditions.RoleWorkflowConditionFactory.EXPECTED_ROLES;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
@@ -23,6 +21,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.workflow.EventBasedWorkflowProviderFactory;
 import org.keycloak.models.workflow.ResourceOperationType;
+import org.keycloak.models.workflow.RestartWorkflowStepProviderFactory;
 import org.keycloak.models.workflow.WorkflowsManager;
 import org.keycloak.models.workflow.SetUserAttributeStepProviderFactory;
 import org.keycloak.models.workflow.conditions.RoleWorkflowConditionFactory;
@@ -30,7 +29,6 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.workflows.WorkflowSetRepresentation;
 import org.keycloak.representations.workflows.WorkflowStepRepresentation;
-import org.keycloak.representations.workflows.WorkflowConditionRepresentation;
 import org.keycloak.representations.workflows.WorkflowRepresentation;
 import org.keycloak.representations.userprofile.config.UPConfig;
 import org.keycloak.representations.userprofile.config.UPConfig.UnmanagedAttributePolicy;
@@ -125,31 +123,31 @@ public class RoleWorkflowConditionTest {
     }
 
     private void createWorkflow(String... expectedValues) {
-        createWorkflow(Map.of(EXPECTED_ROLES, List.of(expectedValues)));
+        createWorkflow(List.of(expectedValues));
     }
 
     private void createWorkflow(List<String> expectedValues) {
-        createWorkflow(Map.of(EXPECTED_ROLES, expectedValues));
-    }
 
-    private void createWorkflow(Map<String, List<String>> attributes) {
-        for (String roleName : attributes.getOrDefault(EXPECTED_ROLES, List.of())) {
+        for (String roleName : expectedValues) {
             createRoleIfNotExists(roleName);
         }
+        String roleCondition = expectedValues.stream()
+                .map(role -> RoleWorkflowConditionFactory.ID + "(" + role + ")")
+                .reduce((a, b) -> a + " AND " + b).orElse(null);
 
         WorkflowSetRepresentation expectedWorkflows = WorkflowRepresentation.create()
                 .of(EventBasedWorkflowProviderFactory.ID)
-                .onEvent(ResourceOperationType.USER_ROLE_ADD.name())
-                .recurring()
-                .onConditions(WorkflowConditionRepresentation.create()
-                        .of(RoleWorkflowConditionFactory.ID)
-                        .withConfig(attributes)
-                        .build())
+                .name(EventBasedWorkflowProviderFactory.ID)
+                .onEvent(ResourceOperationType.USER_ROLE_ADDED.name())
+                .onCondition(roleCondition)
                 .withSteps(
                         WorkflowStepRepresentation.create()
                                 .of(SetUserAttributeStepProviderFactory.ID)
                                 .withConfig("notified", "true")
                                 .after(Duration.ofDays(5))
+                                .build(),
+                        WorkflowStepRepresentation.create()
+                                .of(RestartWorkflowStepProviderFactory.ID)
                                 .build()
                 ).build();
 
