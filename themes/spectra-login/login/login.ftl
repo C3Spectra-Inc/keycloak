@@ -18,20 +18,26 @@
          </div>
     <div class="card" role="region" aria-labelledby="login-heading">
       <h1 id="login-heading">Welcome back!</h1>
+      <#if message?has_content>
+        <div class="alert alert-${message.type?lower_case}">
+          ${message.summary?html}
+        </div>
+      </#if>
       <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form">
+        <input type="hidden" id="id-hidden-input" name="credentialId" value="${login.credentialId!''}" />
         <div class="field">
           <label for="username">Email or Username</label>
-          <input id="username" name="username" type="text" value="${login.username!?html}" placeholder="Enter your email or username" autocomplete="username" autofocus />
+          <input id="username" name="username" type="text" value="${(login.username!'')?html}" placeholder="Enter your email or username" autocomplete="username" autofocus required />
         </div>
         <div class="field pw">
           <label for="password">Password</label>
-          <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
-          <span class="eye" aria-hidden="true">
+          <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+          <button type="button" class="eye" data-password-toggle aria-label="Show password" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#9CA3AF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               <circle cx="12" cy="12" r="3.1" stroke="#9CA3AF" stroke-width="1.6" />
             </svg>
-          </span>
+          </button>
         </div>
         <div class="row">
           <label class="checkbox">
@@ -53,4 +59,40 @@
       </form>
     </div>
   </div>
+  <script>
+    (function() {
+      var passwordInput = document.getElementById('password');
+      var toggleButton = document.querySelector('[data-password-toggle]');
+      if (passwordInput && toggleButton) {
+        toggleButton.addEventListener('click', function() {
+          var isHidden = passwordInput.type === 'password';
+          passwordInput.type = isHidden ? 'text' : 'password';
+          toggleButton.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+          toggleButton.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+          toggleButton.classList.toggle('is-visible', isHidden);
+        });
+      }
+
+      var loginForm = document.getElementById('kc-form-login');
+      if (loginForm) {
+        loginForm.addEventListener('submit', function() {
+          var loginButton = document.getElementById('kc-login');
+          if (loginButton) {
+            loginButton.setAttribute('disabled', 'disabled');
+          }
+        });
+      }
+    })();
+  </script>
+  <#if message?has_content && message.type?has_content && message.type?lower_case == "error">
+    <script>
+      window.addEventListener('DOMContentLoaded', function() {
+        var passwordField = document.getElementById('password');
+        if (passwordField) {
+          passwordField.focus();
+          passwordField.select();
+        }
+      });
+    </script>
+  </#if>
 </@layout.registrationLayout>
