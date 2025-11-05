@@ -52,11 +52,11 @@
               </label>
             </#if>
             <#if realm.resetPasswordAllowed>
-              <a href="${url.loginResetCredentialsUrl}" class="forgot">${msg("doForgotPassword")}</a>
+              <a href="${url.loginResetCredentialsUrl}" class="forgot">Forgot password?</a>
             </#if>
           </div>
         </#if>
-        <button class="btn" type="submit" id="kc-login" name="login" aria-label="${msg('doLogIn')}">${msg("doLogIn")}</button>
+        <button class="btn" type="submit" id="kc-login" name="login" aria-label="Login">Login</button>
         <#if social.providers?has_content>
           <div class="spacer"></div>
       
