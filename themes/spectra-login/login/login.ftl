@@ -18,6 +18,11 @@
          </div>
     <div class="card" role="region" aria-labelledby="login-heading">
       <h1 id="login-heading">Welcome back!</h1>
+      <#if message?has_content>
+        <div class="alert ${message.type}">
+          ${kcSanitize(message.summary)?no_esc}
+        </div>
+      </#if>
       <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form">
         <div class="field">
           <label for="username">Email or Username</label>
@@ -26,23 +31,32 @@
         <div class="field pw">
           <label for="password">Password</label>
           <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
-          <span class="eye" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+          <button class="toggle-password" type="button" id="toggle-password" aria-label="${msg("showPassword")}" aria-controls="password" aria-pressed="false" data-label-show="${msg("showPassword")}" data-label-hide="${msg("hidePassword")}">
+            <svg class="icon-show" viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#9CA3AF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               <circle cx="12" cy="12" r="3.1" stroke="#9CA3AF" stroke-width="1.6" />
             </svg>
-          </span>
+            <svg class="icon-hide" viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#9CA3AF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="12" cy="12" r="3.1" stroke="#9CA3AF" stroke-width="1.6" />
+              <line x1="4" y1="4" x2="20" y2="20" stroke="#9CA3AF" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <span class="sr-only">${msg("showPassword")}</span>
+          </button>
         </div>
         <div class="row">
-          <label class="checkbox">
-            <input type="checkbox" id="rememberMe" name="rememberMe" <#if login.rememberMe?? && login.rememberMe>checked</#if> />
-            <span style="font-size:13px;color:#374151;font-weight:500">Keep me signed in</span>
-          </label>
+          <#if realm.rememberMe>
+            <label class="checkbox">
+              <input type="checkbox" id="rememberMe" name="rememberMe" <#if login.rememberMe?? && login.rememberMe>checked</#if> />
+              <span style="font-size:13px;color:#374151;font-weight:500">${msg("rememberMe")}</span>
+            </label>
+          </#if>
           <#if realm.resetPasswordAllowed>
-            <a href="${url.loginResetCredentialsUrl}" class="forgot">Forgot your password?</a>
+            <a href="${url.loginResetCredentialsUrl}" class="forgot">${msg("doForgotPassword")}</a>
           </#if>
         </div>
-        <button class="btn" type="submit" id="kc-login" aria-label="Sign in">Sign in</button>
+        <input type="hidden" id="id-hidden-input" name="credentialId" <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if> />
+        <button class="btn" type="submit" id="kc-login" name="login" value="${msg("doLogIn")}" aria-label="${msg("doLogIn")}">${msg("doLogIn")}</button>
         <#if social.providers?has_content>
           <div class="spacer"></div>
       
@@ -51,6 +65,28 @@
           </#list>
         </#if>
       </form>
+      <script>
+        (function() {
+          const toggle = document.getElementById('toggle-password');
+          const passwordInput = document.getElementById('password');
+          if (!toggle || !passwordInput) {
+            return;
+          }
+          const showLabel = toggle.getAttribute('data-label-show') || 'Show password';
+          const hideLabel = toggle.getAttribute('data-label-hide') || 'Hide password';
+          toggle.addEventListener('click', function() {
+            const isHidden = passwordInput.getAttribute('type') === 'password';
+            passwordInput.setAttribute('type', isHidden ? 'text' : 'password');
+            toggle.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+            toggle.setAttribute('aria-label', isHidden ? hideLabel : showLabel);
+            const srText = toggle.querySelector(".sr-only");
+            if (srText) {
+              srText.textContent = isHidden ? hideLabel : showLabel;
+            }
+            toggle.classList.toggle("is-visible", isHidden);
+          });
+        })();
+      </script>
     </div>
   </div>
 </@layout.registrationLayout>
