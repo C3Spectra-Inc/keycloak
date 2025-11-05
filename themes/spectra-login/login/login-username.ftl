@@ -17,16 +17,16 @@
       <h1 id="login-username-heading">Welcome back!</h1>
       <#if message?has_content>
         <div class="alert alert-${message.type?lower_case}">
-          ${message.summary?html}
+          ${message.summary}
         </div>
       </#if>
       <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Username capture form" onsubmit="var btn=document.getElementById('kc-login'); if (btn) { btn.disabled = true; } return true;">
         <#if usernameHidden??>
-          <input type="hidden" id="username" name="username" value="${(login.username!'')?html}" />
+          <input type="hidden" id="username" name="username" value="${login.username!''}" />
         <#else>
           <div class="field">
             <label for="username">${msg("usernameOrEmail")}</label>
-            <input id="username" name="username" type="text" value="${(login.username!'')?html}" placeholder="${msg('usernameOrEmail')}" autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" aria-invalid="<#if messagesPerField?? && messagesPerField.existsError('username')>true</#if>" dir="ltr" autofocus required />
+            <input id="username" name="username" type="text" value="${login.username!''}" placeholder="${msg('usernameOrEmail')}" autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" aria-invalid="<#if messagesPerField?? && messagesPerField.existsError('username')>true</#if>" dir="ltr" autofocus required />
           </div>
         </#if>
         <#if realm.rememberMe && !usernameHidden??>

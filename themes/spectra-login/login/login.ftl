@@ -26,11 +26,11 @@
       <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form" onsubmit="var btn=document.getElementById('kc-login'); if (btn) { btn.disabled = true; } return true;">
         <input type="hidden" id="id-hidden-input" name="credentialId" value="${login.credentialId!''}" />
         <#if usernameHidden??>
-          <input type="hidden" id="username" name="username" value="${(login.username!'')?html}" />
+          <input type="hidden" id="username" name="username" value="${login.username!''}" />
         <#else>
           <div class="field">
             <label for="username">Email or Username</label>
-            <input id="username" name="username" type="text" value="${(login.username!'')?html}" placeholder="Enter your email or username" autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" aria-invalid="<#if messagesPerField?? && messagesPerField.existsError('username','password')>true</#if>" autofocus required />
+            <input id="username" name="username" type="text" value="${login.username!''}" placeholder="Enter your email or username" autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" aria-invalid="<#if messagesPerField?? && messagesPerField.existsError('username','password')>true</#if>" autofocus required />
           </div>
         </#if>
         <div class="field pw">
