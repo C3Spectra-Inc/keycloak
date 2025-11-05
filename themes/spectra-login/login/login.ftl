@@ -20,7 +20,7 @@
       <h1 id="login-heading">Welcome back!</h1>
       <#if message?has_content>
         <div class="alert alert-${message.type?lower_case}">
-          ${message.summary?html}
+          ${message.summary}
         </div>
       </#if>
       <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form" onsubmit="var btn=document.getElementById('kc-login'); if (btn) { btn.disabled = true; } return true;">
