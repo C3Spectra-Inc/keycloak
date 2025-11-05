@@ -23,32 +23,40 @@
           ${message.summary?html}
         </div>
       </#if>
-      <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form">
+      <form id="kc-form-login" action="${url.loginAction}" method="post" aria-label="Sign in form" onsubmit="var btn=document.getElementById('kc-login'); if (btn) { btn.disabled = true; } return true;">
         <input type="hidden" id="id-hidden-input" name="credentialId" value="${login.credentialId!''}" />
-        <div class="field">
-          <label for="username">Email or Username</label>
-          <input id="username" name="username" type="text" value="${(login.username!'')?html}" placeholder="Enter your email or username" autocomplete="username" autofocus required />
-        </div>
+        <#if usernameHidden??>
+          <input type="hidden" id="username" name="username" value="${(login.username!'')?html}" />
+        <#else>
+          <div class="field">
+            <label for="username">Email or Username</label>
+            <input id="username" name="username" type="text" value="${(login.username!'')?html}" placeholder="Enter your email or username" autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" aria-invalid="<#if messagesPerField?? && messagesPerField.existsError('username','password')>true</#if>" autofocus required />
+          </div>
+        </#if>
         <div class="field pw">
           <label for="password">Password</label>
-          <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
-          <button type="button" class="eye" data-password-toggle aria-label="Show password" aria-pressed="false">
+          <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" aria-invalid="<#if messagesPerField?? && messagesPerField.existsError('username','password')>true</#if>" required />
+          <button type="button" class="eye" data-password-toggle aria-controls="password" data-label-show="${msg('showPassword')}" data-label-hide="${msg('hidePassword')}" aria-label="${msg('showPassword')}" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#9CA3AF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               <circle cx="12" cy="12" r="3.1" stroke="#9CA3AF" stroke-width="1.6" />
             </svg>
           </button>
         </div>
-        <div class="row">
-          <label class="checkbox">
-            <input type="checkbox" id="rememberMe" name="rememberMe" <#if login.rememberMe?? && login.rememberMe>checked</#if> />
-            <span style="font-size:13px;color:#374151;font-weight:500">Keep me signed in</span>
-          </label>
-          <#if realm.resetPasswordAllowed>
-            <a href="${url.loginResetCredentialsUrl}" class="forgot">Forgot your password?</a>
-          </#if>
-        </div>
-        <button class="btn" type="submit" id="kc-login" aria-label="Sign in">Sign in</button>
+        <#if (realm.rememberMe && !usernameHidden??) || realm.resetPasswordAllowed>
+          <div class="row">
+            <#if realm.rememberMe && !usernameHidden??>
+              <label class="checkbox">
+                <input type="checkbox" id="rememberMe" name="rememberMe" <#if login.rememberMe?? && login.rememberMe>checked</#if> />
+                <span style="font-size:13px;color:#374151;font-weight:500">Keep me signed in</span>
+              </label>
+            </#if>
+            <#if realm.resetPasswordAllowed>
+              <a href="${url.loginResetCredentialsUrl}" class="forgot">${msg("doForgotPassword")}</a>
+            </#if>
+          </div>
+        </#if>
+        <button class="btn" type="submit" id="kc-login" name="login" aria-label="${msg('doLogIn')}">${msg("doLogIn")}</button>
         <#if social.providers?has_content>
           <div class="spacer"></div>
       
@@ -61,16 +69,28 @@
   </div>
   <script>
     (function() {
-      var passwordInput = document.getElementById('password');
-      var toggleButton = document.querySelector('[data-password-toggle]');
-      if (passwordInput && toggleButton) {
-        toggleButton.addEventListener('click', function() {
-          var isHidden = passwordInput.type === 'password';
-          passwordInput.type = isHidden ? 'text' : 'password';
-          toggleButton.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
-          toggleButton.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
-          toggleButton.classList.toggle('is-visible', isHidden);
-        });
+      var toggleButtons = document.querySelectorAll('[data-password-toggle]');
+      if (toggleButtons && toggleButtons.length) {
+        for (var i = 0; i < toggleButtons.length; i++) {
+          (function(btn) {
+            var targetId = btn.getAttribute('aria-controls');
+            var passwordField = targetId ? document.getElementById(targetId) : document.getElementById('password');
+            if (!passwordField) {
+              return;
+            }
+            var labelShow = btn.getAttribute('data-label-show') || 'Show password';
+            var labelHide = btn.getAttribute('data-label-hide') || 'Hide password';
+            btn.addEventListener('click', function() {
+              var shouldShow = passwordField.type === 'password';
+              passwordField.type = shouldShow ? 'text' : 'password';
+              btn.setAttribute('aria-pressed', shouldShow ? 'true' : 'false');
+              btn.setAttribute('aria-label', shouldShow ? labelHide : labelShow);
+              if (btn.classList) {
+                btn.classList.toggle('is-visible', shouldShow);
+              }
+            });
+          })(toggleButtons[i]);
+        }
       }
 
       var loginForm = document.getElementById('kc-form-login');
@@ -78,7 +98,7 @@
         loginForm.addEventListener('submit', function() {
           var loginButton = document.getElementById('kc-login');
           if (loginButton) {
-            loginButton.setAttribute('disabled', 'disabled');
+            loginButton.disabled = true;
           }
         });
       }
