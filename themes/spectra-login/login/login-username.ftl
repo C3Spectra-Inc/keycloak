@@ -38,7 +38,7 @@
             </label>
           </div>
         </#if>
-        <button class="btn" type="submit" id="kc-login" name="login" aria-label="Login">Login</button>
+        <button class="btn" type="submit" id="kc-login" name="login" aria-label="${msg('doLogIn')}">${msg("doLogIn")}</button>
       </form>
     </div>
   </div>

@@ -48,15 +48,15 @@
             <#if realm.rememberMe && !usernameHidden??>
               <label class="checkbox">
                 <input type="checkbox" id="rememberMe" name="rememberMe" <#if login.rememberMe?? && login.rememberMe>checked</#if> />
-                <span style="font-size:13px;color:#374151;font-weight:500">Keep me signed in</span>
+                <span style="font-size:13px;color:#374151;font-weight:500">${msg("rememberMe")}</span>
               </label>
             </#if>
             <#if realm.resetPasswordAllowed>
-              <a href="${url.loginResetCredentialsUrl}" class="forgot">Forgot password?</a>
+              <a href="${url.loginResetCredentialsUrl}" class="forgot">${msg("forgotPassword")}</a>
             </#if>
           </div>
         </#if>
-        <button class="btn" type="submit" id="kc-login" name="login" aria-label="Login">Login</button>
+        <button class="btn" type="submit" id="kc-login" name="login" aria-label="${msg('doLogIn')}">${msg("doLogIn")}</button>
         <#if social.providers?has_content>
           <div class="spacer"></div>
       
