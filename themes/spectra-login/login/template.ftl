@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${msg("loginTitle",(realm.displayName!''))}</title>
+  <title>${msg("loginTitle")}</title>
   <link rel="icon" href="${url.resourcesPath}/img/favicon.ico" />
   <link rel="stylesheet" href="${url.resourcesPath}/css/styles.css" />
 </head>
